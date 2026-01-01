@@ -6,11 +6,6 @@ import chroma from 'chroma-js';
 import { brandColors, brandNames } from './data/darkStores';
 import { parseKML } from './utils/kmlParser';
 import { batchGenerateIsochrones, generateIsochrone } from './services/isochroneService';
-import bangalore10m from './data/precomputed/bangalore_10m.json';
-import mumbai10m from './data/precomputed/mumbai_10m.json';
-import delhi10m from './data/precomputed/delhi_10m.json';
-import hyderabad10m from './data/precomputed/hyderabad_10m.json';
-import pune10m from './data/precomputed/pune_10m.json';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 
@@ -198,7 +193,7 @@ function MapEvents({ onMapClick, onZoomChange, onMoveEnd }) {
 }
 
 // Map overlay components for better indications
-function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed }) {
+function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed, travelMode }) {
   return (
     <>
       {/* Zoom Level Indicator */}
@@ -219,7 +214,11 @@ function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomput
       <div className="map-overlay coverage-stats">
         <div className="coverage-header">
           <span className="coverage-title">Coverage</span>
-          {isPrecomputed && <span className="precomputed-badge">PRE</span>}
+          {isPrecomputed && (
+            <span className={`precomputed-badge ${travelMode === 'bike' ? 'bike-mode' : ''}`}>
+              {travelMode === 'bike' ? 'BIKE' : 'PRE'}
+            </span>
+          )}
         </div>
         <div className="coverage-value">{storeCount} zones</div>
       </div>
@@ -259,8 +258,10 @@ const MemoizedPolygon = memo(function MemoizedPolygon({ positions, color, viewMo
 });
 
 function App() {
+  const [theme, setTheme] = useState('dark');
   const [allStores, setAllStores] = useState([]);
   const [selectedCity, setSelectedCity] = useState('bangalore');
+  const [travelMode, setTravelMode] = useState('walk'); // 'walk' or 'bike'
   const apiKey = import.meta.env.VITE_GEOAPIFY_KEY || '';
   const walkingTime = 10;
   const [isochrones, setIsochrones] = useState([]);
@@ -307,14 +308,16 @@ function App() {
 
   // Memoized polygon positions for performance
   const memoizedPolygons = useMemo(() => {
-    return isochrones.map(({ store, isochrone }, idx) => {
-      const geom = isochrone.features[0].geometry;
-      const positions = geom.type === 'Polygon'
-        ? [geom.coordinates[0].map(([lng, lat]) => [lat, lng])]
-        : geom.coordinates.map(r => r[0].map(([lng, lat]) => [lat, lng]));
-      return { id: idx, store, positions, color: brandColors[store.brand] };
-    });
-  }, [isochrones]);
+    return isochrones
+      .filter(({ store }) => selectedBrands[store.brand])
+      .map(({ store, isochrone }, idx) => {
+        const geom = isochrone.features[0].geometry;
+        const positions = geom.type === 'Polygon'
+          ? [geom.coordinates[0].map(([lng, lat]) => [lat, lng])]
+          : geom.coordinates.map(r => r[0].map(([lng, lat]) => [lat, lng]));
+        return { id: idx, store, positions, color: brandColors[store.brand] };
+      });
+  }, [isochrones, selectedBrands]);
 
   useEffect(() => {
     fetch('/dark_store.kml')
@@ -324,21 +327,40 @@ function App() {
   }, []);
 
   // Handle precomputed data loading
-  const precomputedData = {
-    bangalore: bangalore10m,
-    mumbai: mumbai10m,
-    delhi: delhi10m,
-    hyderabad: hyderabad10m,
-    pune: pune10m
-  };
-
   useEffect(() => {
-    if (walkingTime === 10 && precomputedData[selectedCity]) {
-      setIsochrones(precomputedData[selectedCity].data);
+    // Optimization: Default to Blinkit only for Bike mode to improve initial render performance
+    // and reduce visual clutter on high-density delivery maps.
+    if (travelMode === 'bike') {
+      setSelectedBrands({ blinkit: true, zepto: false, instamart: false });
     } else {
-      setIsochrones([]);
+      setSelectedBrands({ blinkit: true, zepto: true, instamart: true });
     }
-  }, [selectedCity, walkingTime]);
+
+    const loadPrecomputedData = async () => {
+      if (walkingTime !== 10) return;
+
+      setLoading(true);
+      setProgress(0);
+
+      try {
+        const modeSuffix = travelMode === 'walk' ? '' : '_bike';
+        const url = `/data/precomputed/${selectedCity}_10m${modeSuffix}.json`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Data not found');
+
+        const data = await response.json();
+        setIsochrones(data.data || []);
+      } catch (err) {
+        console.warn(`Precomputed data for ${selectedCity} in ${travelMode} mode not found.`, err);
+        setIsochrones([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPrecomputedData();
+  }, [selectedCity, travelMode, walkingTime]);
 
   const filteredStores = useMemo(() => {
     const city = CITIES[selectedCity];
@@ -397,7 +419,7 @@ function App() {
     const results = [];
     for (const store of nearby) {
       try {
-        const iso = await generateIsochrone(store.lat, store.lng, walkingTime, apiKey);
+        const iso = await generateIsochrone(store.lat, store.lng, walkingTime, apiKey, travelMode);
         // Basic check if point is inside isochrone bounding box (approximation)
         // In a real app we'd use turf.booleanPointInPolygon
         results.push(store);
@@ -414,7 +436,7 @@ function App() {
       (Math.pow(b.lat - center[0], 2) + Math.pow(b.lng - center[1], 2))
     );
     // Increased batch limit for full analysis
-    const results = await batchGenerateIsochrones(sorted.slice(0, 100), walkingTime, apiKey, setProgress);
+    const results = await batchGenerateIsochrones(sorted.slice(0, 100), walkingTime, apiKey, setProgress, travelMode);
     setIsochrones(results);
     setLoading(false);
   };
@@ -424,7 +446,7 @@ function App() {
     setLoading(true); setProgress(0);
 
     // Process ALL stores in the current city filter
-    const results = await batchGenerateIsochrones(filteredStores, walkingTime, apiKey, setProgress);
+    const results = await batchGenerateIsochrones(filteredStores, walkingTime, apiKey, setProgress, travelMode);
 
     const exportPayload = {
       city: selectedCity,
@@ -448,18 +470,35 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <div className="control-panel">
         <div className="panel-header">
-          <div className="logo-container">
-            <span className="logo-text">iso</span>
-            <div className="status-dot"></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="logo-container">
+              <span className="logo-text">iso</span>
+              <div className="status-dot"></div>
+            </div>
+            <button
+              className="theme-toggle"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '4px' }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           </div>
           <h1 className="main-title">isochrone map</h1>
           <p className="subtitle">except the metric is walking-time-to-dark-store</p>
         </div>
 
 
+
+        <div className="panel-section">
+          <label className="section-label">Travel Mode</label>
+          <div className="view-toggle">
+            <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>🚶 10m Walk</button>
+            <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>🛵 10m Delivery</button>
+          </div>
+        </div>
 
         <div className="panel-section">
           <label className="section-label">Select City</label>
@@ -490,12 +529,33 @@ function App() {
         <div className="panel-section">
           <label className="section-label">Platforms</label>
           <div className="brand-filters">
-            {Object.entries(brandNames).map(([k, v]) => (
-              <label key={k} className="brand-checkbox">
-                <input type="checkbox" checked={selectedBrands[k]} onChange={() => setSelectedBrands(p => ({ ...p, [k]: !p[k] }))} />
-                <span className="brand-label" style={{ backgroundColor: selectedBrands[k] ? brandColors[k] : 'transparent', borderColor: brandColors[k] }}>{v}</span>
-              </label>
-            ))}
+            {Object.entries(brandNames).map(([k, v]) => {
+              const hexToRgb = (hex) => {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return `${r}, ${g}, ${b}`;
+              };
+              return (
+                <label key={k} className="brand-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedBrands[k]}
+                    onChange={() => setSelectedBrands(p => ({ ...p, [k]: !p[k] }))}
+                  />
+                  <div
+                    className="brand-card"
+                    style={{
+                      '--brand-color': brandColors[k],
+                      '--brand-color-rgb': hexToRgb(brandColors[k])
+                    }}
+                  >
+                    <img src={`/img/${k}.png`} alt={v} className="brand-logo-img" />
+                    <span className="brand-name">{v}</span>
+                  </div>
+                </label>
+              );
+            })}
           </div>
         </div>
 
@@ -543,7 +603,10 @@ function App() {
         >
           <TileLayer
             attribution='&copy; CARTO'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url={theme === 'dark'
+              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            }
             updateWhenZooming={false}
             updateWhenIdle={true}
           />
@@ -582,6 +645,17 @@ function App() {
           )}
         </MapContainer>
 
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="map-loading-overlay">
+            <div className="loading-content">
+              <div className="spinner"></div>
+              <span>Loading City Data...</span>
+              <p className="loading-hint">Fetching high-fidelity polygons</p>
+            </div>
+          </div>
+        )}
+
         {/* Map Overlay Indicators */}
         <MapOverlays
           zoomLevel={zoomLevel}
@@ -589,6 +663,7 @@ function App() {
           storeCount={isochrones.length}
           brandCounts={brandCounts}
           isPrecomputed={walkingTime === 10}
+          travelMode={travelMode}
         />
 
 

@@ -44,6 +44,42 @@
   --transition-slow: 350ms ease;
 }
 
+[data-theme='light'] {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-glass: rgba(251, 251, 253, 0.85);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #4f46e5;
+  --accent-glow: rgba(79, 70, 229, 0.2);
+  --border: rgba(15, 23, 42, 0.1);
+  --border-hover: rgba(15, 23, 42, 0.15);
+  --success: #16a34a;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme='light'] .logo-text {
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+[data-theme='light'] .map-overlay {
+  background: var(--bg-glass);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+}
+
+[data-theme='light'] .jump-btn,
+[data-theme='light'] .city-select,
+[data-theme='light'] .view-toggle {
+  background: #f1f5f9;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -481,32 +517,68 @@ body {
    ============================================ */
 
 .brand-filters {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-sm);
 }
 
 .brand-checkbox {
   cursor: pointer;
+  flex: 1;
 }
 
 .brand-checkbox input {
   display: none;
 }
 
-.brand-label {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: 2px solid;
-  transition: all var(--transition-fast);
-  color: white;
+.brand-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  transition: all var(--transition-normal);
+  text-align: center;
 }
 
-.brand-checkbox input:not(:checked)+.brand-label {
-  color: var(--text-secondary);
+.brand-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: grayscale(1) opacity(0.5);
+  transition: all var(--transition-normal);
+}
+
+.brand-name {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  transition: all var(--transition-normal);
+}
+
+.brand-checkbox input:checked+.brand-card {
+  border-color: var(--brand-color);
+  background: rgba(var(--brand-color-rgb), 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.brand-checkbox input:checked+.brand-card .brand-logo-img {
+  filter: grayscale(0) opacity(1);
+  transform: scale(1.1);
+}
+
+.brand-checkbox input:checked+.brand-card .brand-name {
+  color: var(--text-primary);
+}
+
+[data-theme='light'] .brand-card {
+  background: #f1f5f9;
 }
 
 /* ============================================
@@ -988,6 +1060,11 @@ body {
   letter-spacing: 0.05em;
 }
 
+.precomputed-badge.bike-mode {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
 .coverage-value {
   font-size: 1.25rem;
   font-weight: 700;
@@ -1039,6 +1116,59 @@ body {
   font-size: 0.75rem;
   min-width: 24px;
   text-align: right;
+}
+
+/* ============================================
+   LOADING OVERLAY
+   ============================================ */
+
+.map-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-secondary);
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.map-loading-overlay .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-content span {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.loading-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: -8px;
 }
 
 /* ============================================

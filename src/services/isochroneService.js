@@ -39,18 +39,19 @@ const saveCacheToDisk = () => {
  * @param {string} apiKey - Geoapify API key
  * @returns {Promise<Object>} GeoJSON polygon
  */
-export async function generateIsochrone(lat, lng, minutes, apiKey) {
+export async function generateIsochrone(lat, lng, minutes, apiKey, mode = 'walk') {
     // Round coordinates for consistent cache keys
     const normLat = parseFloat(lat).toFixed(6);
     const normLng = parseFloat(lng).toFixed(6);
-    const cacheKey = `${normLat},${normLng},${minutes}`;
+    const cacheKey = `${normLat},${normLng},${minutes},${mode}`;
 
     if (isochroneCache.has(cacheKey)) {
         return isochroneCache.get(cacheKey);
     }
 
     const seconds = minutes * 60;
-    const url = `${GEOAPIFY_BASE_URL}?lat=${normLat}&lon=${normLng}&type=time&mode=walk&range=${seconds}&apiKey=${apiKey}`;
+    const geoapifyMode = mode === 'bike' ? 'motorcycle' : 'walk';
+    const url = `${GEOAPIFY_BASE_URL}?lat=${normLat}&lon=${normLng}&type=time&mode=${geoapifyMode}&range=${seconds}&apiKey=${apiKey}`;
 
     try {
         const response = await fetch(url);
@@ -66,7 +67,7 @@ export async function generateIsochrone(lat, lng, minutes, apiKey) {
     } catch (error) {
         console.error('Isochrone API error:', error);
         // Return fallback circle if API fails
-        return createFallbackCircle(lat, lng, minutes);
+        return createFallbackCircle(lat, lng, minutes, mode);
     }
 }
 
@@ -78,7 +79,7 @@ export async function generateIsochrone(lat, lng, minutes, apiKey) {
  * @param {Function} onProgress - Progress callback
  * @returns {Promise<Array>} Array of isochrone results
  */
-export async function batchGenerateIsochrones(stores, minutes, apiKey, onProgress) {
+export async function batchGenerateIsochrones(stores, minutes, apiKey, onProgress, mode = 'walk') {
     const results = [];
     const batchSize = 5;
     const delayMs = 200; // Rate limiting
@@ -88,7 +89,7 @@ export async function batchGenerateIsochrones(stores, minutes, apiKey, onProgres
 
         const batchResults = await Promise.all(
             batch.map(store =>
-                generateIsochrone(store.lat, store.lng, minutes, apiKey)
+                generateIsochrone(store.lat, store.lng, minutes, apiKey, mode)
                     .then(iso => ({ store, isochrone: iso }))
             )
         );
@@ -111,9 +112,12 @@ export async function batchGenerateIsochrones(stores, minutes, apiKey, onProgres
 /**
  * Create a fallback circle when API is unavailable
  */
-function createFallbackCircle(lat, lng, minutes) {
-    // Approximate walking speed: 5 km/h = 83.3 m/min
-    const radiusMeters = minutes * 83.3;
+function createFallbackCircle(lat, lng, minutes, mode = 'walk') {
+    // Approximate speeds:
+    // Walk: 5 km/h = 83.3 m/min
+    // Bike (Motorcycle): 24 km/h = 400 m/min (rough average for urban traffic)
+    const speed = mode === 'bike' ? 400 : 83.3;
+    const radiusMeters = minutes * speed;
     const points = 32;
     const coordinates = [];
 
@@ -138,7 +142,7 @@ function createFallbackCircle(lat, lng, minutes) {
                 coordinates: [coordinates]
             },
             properties: {
-                mode: 'walk',
+                mode: mode,
                 range: { value: minutes * 60, unit: 'seconds' }
             }
         }]
