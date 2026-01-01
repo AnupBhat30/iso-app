@@ -511,7 +511,7 @@ function App() {
         <div className="stats-panel">
           <div className="stat">
             <span className="stat-value">{filteredStores.length}</span>
-            <span className="stat-label">Nodes</span>
+            <span className="stat-label">Stores</span>
           </div>
           <div className="stat">
             <span className="stat-value">{redundancyMetric}%</span>
@@ -519,7 +519,7 @@ function App() {
           </div>
           <div className="stat">
             <span className="stat-value">{walkingTime}m</span>
-            <span className="stat-label">Wait</span>
+            <span className="stat-label">Walk</span>
           </div>
         </div>
 
