@@ -1,7 +1,35 @@
 const GEOAPIFY_BASE_URL = 'https://api.geoapify.com/v1/isoline';
+const CACHE_VERSION = 'v1';
 
 // Cache for isochrone results
 const isochroneCache = new Map();
+
+// Initialize cache from localStorage
+try {
+    const savedCache = localStorage.getItem('isochrone_persistence');
+    if (savedCache) {
+        const parsed = JSON.parse(savedCache);
+        if (parsed.version === CACHE_VERSION) {
+            Object.entries(parsed.data).forEach(([key, value]) => {
+                isochroneCache.set(key, value);
+            });
+        }
+    }
+} catch (e) {
+    console.warn('Could not initialize isochrone cache:', e);
+}
+
+const saveCacheToDisk = () => {
+    try {
+        const cacheData = Object.fromEntries(isochroneCache);
+        localStorage.setItem('isochrone_persistence', JSON.stringify({
+            version: CACHE_VERSION,
+            data: cacheData
+        }));
+    } catch (e) {
+        console.warn('Failed to save isochrone cache to disk:', e);
+    }
+};
 
 /**
  * Generate isochrone polygon for a single location
@@ -12,14 +40,17 @@ const isochroneCache = new Map();
  * @returns {Promise<Object>} GeoJSON polygon
  */
 export async function generateIsochrone(lat, lng, minutes, apiKey) {
-    const cacheKey = `${lat},${lng},${minutes}`;
+    // Round coordinates for consistent cache keys
+    const normLat = parseFloat(lat).toFixed(6);
+    const normLng = parseFloat(lng).toFixed(6);
+    const cacheKey = `${normLat},${normLng},${minutes}`;
 
     if (isochroneCache.has(cacheKey)) {
         return isochroneCache.get(cacheKey);
     }
 
     const seconds = minutes * 60;
-    const url = `${GEOAPIFY_BASE_URL}?lat=${lat}&lon=${lng}&type=time&mode=walk&range=${seconds}&apiKey=${apiKey}`;
+    const url = `${GEOAPIFY_BASE_URL}?lat=${normLat}&lon=${normLng}&type=time&mode=walk&range=${seconds}&apiKey=${apiKey}`;
 
     try {
         const response = await fetch(url);
@@ -30,6 +61,7 @@ export async function generateIsochrone(lat, lng, minutes, apiKey) {
 
         const data = await response.json();
         isochroneCache.set(cacheKey, data);
+        saveCacheToDisk();
         return data;
     } catch (error) {
         console.error('Isochrone API error:', error);
@@ -118,4 +150,5 @@ function createFallbackCircle(lat, lng, minutes) {
  */
 export function clearCache() {
     isochroneCache.clear();
+    localStorage.removeItem('isochrone_persistence');
 }

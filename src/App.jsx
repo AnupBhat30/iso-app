@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -6,8 +6,16 @@ import chroma from 'chroma-js';
 import { brandColors, brandNames } from './data/darkStores';
 import { parseKML } from './utils/kmlParser';
 import { batchGenerateIsochrones, generateIsochrone } from './services/isochroneService';
+import bangalore10m from './data/precomputed/bangalore_10m.json';
+import mumbai10m from './data/precomputed/mumbai_10m.json';
+import delhi10m from './data/precomputed/delhi_10m.json';
+import hyderabad10m from './data/precomputed/hyderabad_10m.json';
+import pune10m from './data/precomputed/pune_10m.json';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
+
+// Use Canvas renderer for better performance with many polygons
+const canvasRenderer = L.canvas({ padding: 0.5 });
 
 // Fix default marker icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -175,18 +183,86 @@ function MapController({ center, zoom = 13 }) {
   return null;
 }
 
-function MapEvents({ onMapClick }) {
-  useMapEvents({
+function MapEvents({ onMapClick, onZoomChange, onMoveEnd }) {
+  const map = useMapEvents({
     click: (e) => onMapClick([e.latlng.lat, e.latlng.lng]),
+    zoomend: () => onZoomChange?.(map.getZoom()),
+    moveend: () => onMoveEnd?.(map.getCenter()),
   });
+
+  useEffect(() => {
+    onZoomChange?.(map.getZoom());
+  }, []);
+
   return null;
 }
+
+// Map overlay components for better indications
+function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed }) {
+  return (
+    <>
+      {/* Zoom Level Indicator */}
+      <div className="map-overlay zoom-indicator">
+        <span className="zoom-icon">🔍</span>
+        <span className="zoom-value">{zoomLevel}x</span>
+      </div>
+
+      {/* Area Name Badge */}
+      {areaName && (
+        <div className="map-overlay area-badge">
+          <span className="area-icon">📍</span>
+          <span className="area-name">{areaName}</span>
+        </div>
+      )}
+
+      {/* Coverage Stats */}
+      <div className="map-overlay coverage-stats">
+        <div className="coverage-header">
+          <span className="coverage-title">Coverage</span>
+          {isPrecomputed && <span className="precomputed-badge">PRE</span>}
+        </div>
+        <div className="coverage-value">{storeCount} zones</div>
+      </div>
+
+      {/* Brand Legend */}
+      <div className="map-overlay brand-legend">
+        <div className="legend-title">Platforms</div>
+        {Object.entries(brandCounts).map(([brand, count]) => (
+          <div key={brand} className="legend-row">
+            <span
+              className="legend-dot"
+              style={{ backgroundColor: brandColors[brand] }}
+            />
+            <span className="legend-label">{brandNames[brand]}</span>
+            <span className="legend-count">{count}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// Memoized polygon component for better performance
+const MemoizedPolygon = memo(function MemoizedPolygon({ positions, color, viewMode }) {
+  return (
+    <Polygon
+      positions={positions}
+      pathOptions={{
+        color: color,
+        fillColor: color,
+        fillOpacity: viewMode === 'heatmap' ? 0.15 : 0.3,
+        weight: viewMode === 'heatmap' ? 0 : 1.5,
+        renderer: canvasRenderer
+      }}
+    />
+  );
+});
 
 function App() {
   const [allStores, setAllStores] = useState([]);
   const [selectedCity, setSelectedCity] = useState('bangalore');
   const apiKey = import.meta.env.VITE_GEOAPIFY_KEY || '';
-  const [walkingTime, setWalkingTime] = useState(10);
+  const walkingTime = 10;
   const [isochrones, setIsochrones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -201,12 +277,68 @@ function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [localAccessibility, setLocalAccessibility] = useState(null);
 
+  // Map overlay state
+  const [zoomLevel, setZoomLevel] = useState(13);
+  const [currentArea, setCurrentArea] = useState(null);
+
+  // Find nearest area name based on map center
+  const findNearestArea = useCallback((center) => {
+    const city = CITIES[selectedCity];
+    let nearest = null;
+    let minDist = Infinity;
+    city.areas.forEach(area => {
+      const dist = Math.sqrt(Math.pow(area.lat - center.lat, 2) + Math.pow(area.lng - center.lng, 2));
+      if (dist < minDist && dist < 0.03) { // ~3km threshold
+        minDist = dist;
+        nearest = area.name;
+      }
+    });
+    setCurrentArea(nearest);
+  }, [selectedCity]);
+
+  // Brand counts for legend
+  const brandCounts = useMemo(() => {
+    const counts = { blinkit: 0, zepto: 0, instamart: 0 };
+    isochrones.forEach(({ store }) => {
+      if (counts[store.brand] !== undefined) counts[store.brand]++;
+    });
+    return counts;
+  }, [isochrones]);
+
+  // Memoized polygon positions for performance
+  const memoizedPolygons = useMemo(() => {
+    return isochrones.map(({ store, isochrone }, idx) => {
+      const geom = isochrone.features[0].geometry;
+      const positions = geom.type === 'Polygon'
+        ? [geom.coordinates[0].map(([lng, lat]) => [lat, lng])]
+        : geom.coordinates.map(r => r[0].map(([lng, lat]) => [lat, lng]));
+      return { id: idx, store, positions, color: brandColors[store.brand] };
+    });
+  }, [isochrones]);
+
   useEffect(() => {
     fetch('/dark_store.kml')
       .then(res => res.text())
       .then(kml => setAllStores(parseKML(kml)))
       .catch(err => console.error('KML Load Error:', err));
   }, []);
+
+  // Handle precomputed data loading
+  const precomputedData = {
+    bangalore: bangalore10m,
+    mumbai: mumbai10m,
+    delhi: delhi10m,
+    hyderabad: hyderabad10m,
+    pune: pune10m
+  };
+
+  useEffect(() => {
+    if (walkingTime === 10 && precomputedData[selectedCity]) {
+      setIsochrones(precomputedData[selectedCity].data);
+    } else {
+      setIsochrones([]);
+    }
+  }, [selectedCity, walkingTime]);
 
   const filteredStores = useMemo(() => {
     const city = CITIES[selectedCity];
@@ -281,8 +413,37 @@ function App() {
       (Math.pow(a.lat - center[0], 2) + Math.pow(a.lng - center[1], 2)) -
       (Math.pow(b.lat - center[0], 2) + Math.pow(b.lng - center[1], 2))
     );
-    const results = await batchGenerateIsochrones(sorted.slice(0, 45), walkingTime, apiKey, setProgress);
+    // Increased batch limit for full analysis
+    const results = await batchGenerateIsochrones(sorted.slice(0, 100), walkingTime, apiKey, setProgress);
     setIsochrones(results);
+    setLoading(false);
+  };
+
+  const exportCityData = async () => {
+    if (!apiKey) return;
+    setLoading(true); setProgress(0);
+
+    // Process ALL stores in the current city filter
+    const results = await batchGenerateIsochrones(filteredStores, walkingTime, apiKey, setProgress);
+
+    const exportPayload = {
+      city: selectedCity,
+      walkTime: walkingTime,
+      count: results.length,
+      timestamp: new Date().toISOString(),
+      polygons: results
+    };
+
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedCity}_${walkingTime}m_coverage.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
     setLoading(false);
   };
 
@@ -294,22 +455,11 @@ function App() {
             <span className="logo-text">iso</span>
             <div className="status-dot"></div>
           </div>
-          <h1 className="main-title">Spatial Accessibility</h1>
-          <p className="subtitle">Real-time Hyper-convenience Analysis</p>
+          <h1 className="main-title">isochrone map</h1>
+          <p className="subtitle">except the metric is walking-time-to-dark-store</p>
         </div>
 
-        {/* Address Search */}
-        <div className="panel-section">
-          <label className="section-label">Find Location</label>
-          <form onSubmit={handleSearch} className="search-box">
-            <input
-              type="text" value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search address or neighborhood..."
-            />
-            <button type="submit" className="search-btn">🔍</button>
-          </form>
-        </div>
+
 
         <div className="panel-section">
           <label className="section-label">Select City</label>
@@ -335,10 +485,7 @@ function App() {
 
 
 
-        <div className="panel-section">
-          <label className="section-label">Walk Time: <span className="value-badge">{walkingTime} min</span></label>
-          <input type="range" min="5" max="15" value={walkingTime} onChange={e => setWalkingTime(parseInt(e.target.value))} className="slider" />
-        </div>
+
 
         <div className="panel-section">
           <label className="section-label">Platforms</label>
@@ -359,11 +506,7 @@ function App() {
           </div>
         </div>
 
-        <button className="btn-generate" onClick={generateZones} disabled={loading || !apiKey}>
-          {loading ? <span className="spinner"></span> : 'Analyze Network Saturation'}
-        </button>
 
-        {loading && <div className="progress-container"><div className="progress-bar" style={{ width: `${progress}%` }}></div></div>}
 
         <div className="stats-panel">
           <div className="stat">
@@ -380,61 +523,56 @@ function App() {
           </div>
         </div>
 
-        {/* Local Analysis Card */}
-        {userLocation && (
-          <div className="analysis-card highlighted">
-            <div className="card-header">
-              <h4>Location Access</h4>
-            </div>
-            {localAccessibility?.loading ? (
-              <div className="fetching-loader">
-                <div className="dot"></div>
-                <div className="dot"></div>
-                <div className="dot :nth-child(2)" style={{ animationDelay: '0.2s' }}></div>
-                <div className="dot :nth-child(3)" style={{ animationDelay: '0.4s' }}></div>
-              </div>
-            ) : (
-              <div>
-                <p className="access-summary">
-                  <strong>{localAccessibility?.stores.length}</strong> services reach this coordinate.
-                </p>
-                <div className="access-brands">
-                  {localAccessibility?.stores.map((s, i) => (
-                    <div key={i} className="brand-dot-chip" style={{ background: brandColors[s.brand] }}>
-                      {s.brand[0].toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <button className="clear-btn" onClick={() => setUserLocation(null)}>Reset Point</button>
-          </div>
-        )}
+
 
         <div className="hypothesis-callout">
           <div className="callout-icon">💡</div>
           <div className="callout-content">
-            <strong>Network Density:</strong> High overlap indicates strong service density but can imply operational redundancy for the platforms.
+            <strong>The Concept</strong>
+            "Someone should make an isochrone map, except the metric is walking-time-to-dark-store."
           </div>
         </div>
       </div>
 
       <div className="map-container">
-        <MapContainer center={CITIES.bangalore.center} zoom={13} style={{ height: '100%', width: '100%' }}>
-          <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+        <MapContainer
+          center={CITIES.bangalore.center}
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+          preferCanvas={true}
+        >
+          <TileLayer
+            attribution='&copy; CARTO'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            updateWhenZooming={false}
+            updateWhenIdle={true}
+          />
           <MapController center={mapCenter} />
-          <MapEvents onMapClick={testAccessibility} />
+          <MapEvents
+            onMapClick={testAccessibility}
+            onZoomChange={setZoomLevel}
+            onMoveEnd={findNearestArea}
+          />
 
-          {isochrones.map(({ store, isochrone }, idx) => {
-            const geom = isochrone.features[0].geometry;
-            const positions = geom.type === 'Polygon' ? [geom.coordinates[0].map(([lng, lat]) => [lat, lng])] : geom.coordinates.map(r => r[0].map(([lng, lat]) => [lat, lng]));
-            return <Polygon key={idx} positions={positions} pathOptions={{ color: brandColors[store.brand], fillColor: brandColors[store.brand], fillOpacity: viewMode === 'heatmap' ? 0.12 : 0.25, weight: viewMode === 'heatmap' ? 0 : 1 }} />;
-          })}
+          {/* Render memoized polygons for better performance */}
+          {memoizedPolygons.map(({ id, positions, color }) => (
+            <MemoizedPolygon
+              key={id}
+              positions={positions}
+              color={color}
+              viewMode={viewMode}
+            />
+          ))}
 
           {userLocation && <Marker position={userLocation} icon={searchIcon} />}
 
           {showMarkers && (
-            <MarkerClusterGroup chunkedLoading maxClusterRadius={40}>
+            <MarkerClusterGroup
+              chunkedLoading
+              maxClusterRadius={50}
+              spiderfyOnMaxZoom={true}
+              disableClusteringAtZoom={16}
+            >
               {filteredStores.map((s, i) => (
                 <Marker key={i} position={[s.lat, s.lng]} icon={createBrandIcon(s.brand, 20)}>
                   <Popup><strong>{s.name}</strong><br />{brandNames[s.brand]}</Popup>
@@ -443,7 +581,17 @@ function App() {
             </MarkerClusterGroup>
           )}
         </MapContainer>
-        <div className="map-hint">Click anywhere on the map to test accessibility for that spot</div>
+
+        {/* Map Overlay Indicators */}
+        <MapOverlays
+          zoomLevel={zoomLevel}
+          areaName={currentArea}
+          storeCount={isochrones.length}
+          brandCounts={brandCounts}
+          isPrecomputed={walkingTime === 10}
+        />
+
+
       </div>
     </div>
   );
