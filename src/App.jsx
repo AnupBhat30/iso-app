@@ -193,7 +193,7 @@ function MapEvents({ onMapClick, onZoomChange, onMoveEnd }) {
 }
 
 // Map overlay components for better indications
-function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed, travelMode }) {
+function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed, travelMode, areas, onJump }) {
   return (
     <>
       {/* Zoom Level Indicator */}
@@ -202,26 +202,23 @@ function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomput
         <span className="zoom-value">{zoomLevel}x</span>
       </div>
 
-      {/* Area Name Badge */}
-      {areaName && (
-        <div className="map-overlay area-badge">
-          <span className="area-icon">📍</span>
-          <span className="area-name">{areaName}</span>
+      {/* Quick Jump Navigator Strip */}
+      <div className="area-navigator">
+        <div className="area-scroller-container">
+          <div className="area-pill-list">
+            {areas?.map(l => (
+              <button
+                key={l.name}
+                className={`area-pill ${areaName === l.name ? 'active' : ''}`}
+                onClick={() => onJump([l.lat, l.lng])}
+              >
+                {l.name}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
-
-      {/* Coverage Stats */}
-      <div className="map-overlay coverage-stats">
-        <div className="coverage-header">
-          <span className="coverage-title">Coverage</span>
-          {isPrecomputed && (
-            <span className={`precomputed-badge ${travelMode === 'bike' ? 'bike-mode' : ''}`}>
-              {travelMode === 'bike' ? 'BIKE' : 'PRE'}
-            </span>
-          )}
-        </div>
-        <div className="coverage-value">{storeCount} zones</div>
       </div>
+
 
       {/* Brand Legend */}
       <div className="map-overlay brand-legend">
@@ -513,14 +510,6 @@ function App() {
           </select>
         </div>
 
-        <div className="panel-section">
-          <label className="section-label">Quick Jump</label>
-          <div className="quick-jumps">
-            {CITIES[selectedCity].areas.map(l => (
-              <button key={l.name} className="jump-btn" onClick={() => setMapCenter([l.lat, l.lng])}>{l.name}</button>
-            ))}
-          </div>
-        </div>
 
 
 
@@ -605,7 +594,7 @@ function App() {
             attribution='&copy; CARTO'
             url={theme === 'dark'
               ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             }
             updateWhenZooming={false}
             updateWhenIdle={true}
@@ -664,6 +653,8 @@ function App() {
           brandCounts={brandCounts}
           isPrecomputed={walkingTime === 10}
           travelMode={travelMode}
+          areas={CITIES[selectedCity].areas}
+          onJump={setMapCenter}
         />
 
 

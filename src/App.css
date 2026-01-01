@@ -1005,26 +1005,84 @@ body {
   color: var(--accent);
 }
 
-/* Area Badge - Top Center */
-.area-badge {
+/* Area Navigator - Top Center */
+.area-navigator {
+  position: absolute;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.area-badge {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
   background: linear-gradient(135deg, var(--bg-glass), rgba(99, 102, 241, 0.15));
   border-color: rgba(99, 102, 241, 0.3);
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
 }
 
-.area-icon {
-  font-size: 0.875rem;
+.area-scroller-container {
+  width: 100%;
+  overflow: hidden;
+  padding: 8px 0;
+  /* Increased padding to prevent clipping of transforms/shadows */
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
 }
 
-.area-name {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.area-pill-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 40px;
+  /* Added vertical padding here too */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.area-pill-list::-webkit-scrollbar {
+  display: none;
+}
+
+.area-pill {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(8px);
+  outline: none;
+  /* Remove default outline that causes clipping */
+}
+
+.area-pill:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.area-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: var(--shadow-glow);
 }
 
 /* Coverage Stats - Bottom Right */
