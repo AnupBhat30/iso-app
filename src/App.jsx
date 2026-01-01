@@ -261,13 +261,13 @@ function App() {
   const [theme, setTheme] = useState('dark');
   const [allStores, setAllStores] = useState([]);
   const [selectedCity, setSelectedCity] = useState('bangalore');
-  const [travelMode, setTravelMode] = useState('walk'); // 'walk' or 'bike'
+  const [travelMode, setTravelMode] = useState('bike'); // 'walk' or 'bike'
   const apiKey = import.meta.env.VITE_GEOAPIFY_KEY || '';
   const walkingTime = 10;
   const [isochrones, setIsochrones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [selectedBrands, setSelectedBrands] = useState({ blinkit: true, zepto: true, instamart: true });
+  const [selectedBrands, setSelectedBrands] = useState({ blinkit: true, zepto: false, instamart: false });
   const [viewMode, setViewMode] = useState('heatmap');
   const [showMarkers, setShowMarkers] = useState(true);
   const [mapCenter, setMapCenter] = useState(CITIES.bangalore.center);
