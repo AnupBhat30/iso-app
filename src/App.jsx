@@ -445,8 +445,8 @@ function App() {
 
   return (
     <div className="app" data-theme={theme}>
-      <div className="control-panel">
-        <div className="panel-header">
+      <aside className="control-panel">
+        <header className="panel-header">
           <div className="header-main-row">
             <h1 className="main-title">Dark Store Map</h1>
             <button
@@ -457,13 +457,13 @@ function App() {
             </button>
           </div>
           <p className="subtitle">A 10-minute isochrone map showing the reach of dark store networks.</p>
-        </div>
+        </header>
 
 
 
 
 
-        <div className="panel-section">
+        <section className="panel-section">
           <label className="section-label">Select City</label>
           <select className="city-select" value={selectedCity} onChange={e => {
             setSelectedCity(e.target.value);
@@ -474,22 +474,22 @@ function App() {
           }}>
             {Object.entries(CITIES).map(([k, c]) => <option key={k} value={k}>{c.name}</option>)}
           </select>
-        </div>
+        </section>
 
-        <div className="panel-section">
+        <section className="panel-section">
           <label className="section-label">Travel Mode</label>
           <div className="view-toggle">
             <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>10m Walk</button>
             <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>10m Delivery</button>
           </div>
-        </div>
+        </section>
 
 
 
 
 
 
-        <div className="panel-section">
+        <section className="panel-section">
           <label className="section-label">Platforms</label>
           <div className="brand-filters">
             {Object.entries(brandNames).map(([k, v]) => {
@@ -508,14 +508,14 @@ function App() {
               );
             })}
           </div>
-        </div>
+        </section>
 
-        <div className="panel-section">
+        <section className="panel-section">
           <div className="view-toggle">
             <button className={`toggle-btn ${viewMode === 'heatmap' ? 'active' : ''}`} onClick={() => setViewMode('heatmap')}>Heatmap</button>
             <button className={`toggle-btn ${viewMode === 'isochrones' ? 'active' : ''}`} onClick={() => setViewMode('isochrones')}>Polygons</button>
           </div>
-        </div>
+        </section>
 
 
 
@@ -523,15 +523,15 @@ function App() {
 
 
 
-        <div className="hypothesis-callout">
+        <footer className="hypothesis-callout">
           <div className="callout-content">
             <strong>What is it?</strong>
             A spatial visualization of dark store coverage metrics using 10-minute isochrones.
           </div>
-        </div>
-      </div>
+        </footer>
+      </aside>
 
-      <div className="map-container">
+      <main className="map-container">
         <MapContainer
           center={CITIES.bangalore.center}
           zoom={13}
@@ -629,7 +629,7 @@ function App() {
         />
 
 
-      </div>
+      </main>
     </div>
   );
 }
