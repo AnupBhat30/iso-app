@@ -456,7 +456,7 @@ function App() {
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
           </div>
-          <p className="subtitle">A 10-minute isochrone map showing the reach of dark store networks.</p>
+          <p className="subtitle">Explore the reach of Zepto, Blinkit, and Instamart dark stores in Indian cities.</p>
         </header>
 
 
@@ -529,6 +529,13 @@ function App() {
             A spatial visualization of dark store coverage metrics using 10-minute isochrones.
           </div>
         </footer>
+
+        <div className="built-by">
+          <span>built by </span>
+          <a href="https://x.com/anupbhat30" target="_blank" rel="noopener noreferrer">
+            @anupbhat30
+          </a>
+        </div>
       </aside>
 
       <main className="map-container">
