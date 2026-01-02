@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Marker, Popup, useMap, useMapEvents, GeoJSON } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import chroma from 'chroma-js';
@@ -270,7 +270,6 @@ function App() {
   const [mapCenter, setMapCenter] = useState(CITIES.bangalore.center);
 
   // New features state
-  const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [localAccessibility, setLocalAccessibility] = useState(null);
@@ -278,6 +277,7 @@ function App() {
   // Map overlay state
   const [zoomLevel, setZoomLevel] = useState(13);
   const [currentArea, setCurrentArea] = useState(null);
+  const [metroLines, setMetroLines] = useState(null);
 
   // Find nearest area name based on map center
   const findNearestArea = useCallback((center) => {
@@ -321,6 +321,12 @@ function App() {
       .then(res => res.text())
       .then(kml => setAllStores(parseKML(kml)))
       .catch(err => console.error('KML Load Error:', err));
+
+    // Load metro lines for orientation
+    fetch('/data/precomputed/export.geojson')
+      .then(res => res.json())
+      .then(data => setMetroLines(data))
+      .catch(err => console.warn('Metro lines not loaded:', err));
   }, []);
 
   // Handle precomputed data loading
@@ -347,7 +353,19 @@ function App() {
         if (!response.ok) throw new Error('Data not found');
 
         const data = await response.json();
-        setIsochrones(data.data || []);
+        const rawData = data.data || [];
+
+        // Deduplicate stores within the same brand at the exact same location
+        // to prevent redundant polygon stacking and improve performance.
+        const seen = new Set();
+        const deduplicated = rawData.filter(item => {
+          const key = `${item.store.brand}:${item.store.lat},${item.store.lng}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setIsochrones(deduplicated);
       } catch (err) {
         console.warn(`Precomputed data for ${selectedCity} in ${travelMode} mode not found.`, err);
         setIsochrones([]);
@@ -383,47 +401,32 @@ function App() {
     return Math.round((duplicates / filteredStores.length) * 100);
   }, [filteredStores, isochrones]);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery || !apiKey) return;
-    try {
-      const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchQuery)}&lat=${mapCenter[0]}&lon=${mapCenter[1]}&apiKey=${apiKey}`);
-      const data = await res.json();
-      if (data.features?.length > 0) {
-        const [lng, lat] = data.features[0].geometry.coordinates;
-        setSearchResult([lat, lng]);
-        setMapCenter([lat, lng]);
-        testAccessibility(lat, lng);
-      }
-    } catch (err) { console.error('Search error:', err); }
-  };
 
   const testAccessibility = async (arg1, arg2) => {
     // Handle both direct (lat, lng) and map event ([lat, lng]) calls
     const lat = Array.isArray(arg1) ? arg1[0] : arg1;
     const lng = Array.isArray(arg1) ? arg1[1] : arg2;
 
-    if (!apiKey || lat === undefined || lng === undefined) return;
+    if (lat === undefined || lng === undefined) return;
     setUserLocation([lat, lng]);
     setLocalAccessibility({ loading: true, stores: [] });
 
-    // Find stores within roughly 2km to check
+    // Find stores within relevant check distance
     const nearby = filteredStores.filter(s => {
       const dist = Math.sqrt(Math.pow(s.lat - lat, 2) + Math.pow(s.lng - lng, 2));
-      return dist < 0.02; // Roughly 2km
+      return dist < (travelMode === 'bike' ? 0.035 : 0.02);
     });
 
     const results = [];
     for (const store of nearby) {
       try {
-        const iso = await generateIsochrone(store.lat, store.lng, walkingTime, apiKey, travelMode);
-        // Basic check if point is inside isochrone bounding box (approximation)
-        // In a real app we'd use turf.booleanPointInPolygon
+        await generateIsochrone(store.lat, store.lng, walkingTime, apiKey, travelMode);
         results.push(store);
       } catch (e) { }
     }
     setLocalAccessibility({ loading: false, stores: results });
   };
+
 
   const generateZones = async () => {
     setLoading(true); setProgress(0);
@@ -592,12 +595,21 @@ function App() {
         >
           <TileLayer
             attribution='&copy; CARTO'
+            className="map-base-layer"
             url={theme === 'dark'
-              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
             }
-            updateWhenZooming={false}
-            updateWhenIdle={true}
+          />
+
+          {/* Top Layer: Labels, Stations & Landmarks */}
+          <TileLayer
+            url={theme === 'dark'
+              ? "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+            }
+            zIndex={100}
+            pane="markerPane"
           />
           <MapController center={mapCenter} />
           <MapEvents
@@ -616,6 +628,21 @@ function App() {
             />
           ))}
 
+          {/* Metro Lines Orientation Layer */}
+          {metroLines && (
+            <GeoJSON
+              data={metroLines}
+              filter={(feature) => feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString'}
+              style={(feature) => ({
+                color: feature.properties.colour || '#888888',
+                weight: 2,
+                opacity: 0.4,
+                lineCap: 'round',
+                lineJoin: 'round'
+              })}
+            />
+          )}
+
           {userLocation && <Marker position={userLocation} icon={searchIcon} />}
 
           {showMarkers && (
@@ -633,6 +660,7 @@ function App() {
             </MarkerClusterGroup>
           )}
         </MapContainer>
+
 
         {/* Loading Overlay */}
         {loading && (

@@ -94,6 +94,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+
 /* ============================================
    LAYOUT
    ============================================ */
@@ -1176,6 +1177,7 @@ body {
   text-align: right;
 }
 
+
 /* ============================================
    LOADING OVERLAY
    ============================================ */
@@ -1250,4 +1252,24 @@ body {
   .map-container {
     height: 50vh;
   }
+}
+
+/* ============================================
+   METRO LINE TOOLTIPS
+   ============================================ */
+
+.metro-tooltip {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.metro-tooltip::before {
+  display: none;
 }
