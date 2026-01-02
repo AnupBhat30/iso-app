@@ -139,7 +139,7 @@ const CITIES = {
   }
 };
 
-const createBrandIcon = (brand, size = 18) => {
+const createBrandIcon = (brand, size = 7) => {
   const color = brandColors[brand] || '#666';
   return L.divIcon({
     className: 'custom-marker',
@@ -148,9 +148,10 @@ const createBrandIcon = (brand, size = 18) => {
       width: ${size}px;
       height: ${size}px;
       border-radius: 50%;
-      border: 2px solid white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      transition: all 0.3s ease;
+      border: 1px solid white;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      opacity: 0.5;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     "></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
