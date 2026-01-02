@@ -137,31 +137,23 @@ body {
 
 .panel-header {
   padding-bottom: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
 }
 
-.logo-container {
+.header-main-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.logo-text {
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
 }
 
 .main-title {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin-top: 16px;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
 }
 
 .subtitle {
@@ -169,8 +161,26 @@ body {
   color: var(--text-secondary);
   font-weight: 400;
   line-height: 1.4;
-  margin-top: 6px;
+  letter-spacing: -0.015em;
+}
+
+.theme-toggle {
+  background: rgba(134, 134, 139, 0.1);
+  border: none;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 100px;
+  transition: all var(--transition-fast);
   letter-spacing: -0.01em;
+}
+
+.theme-toggle:hover {
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--accent-secondary);
+  transform: scale(1.02);
 }
 
 .theme-toggle {
@@ -1235,21 +1245,22 @@ body {
   .panel-header {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     padding-bottom: 0;
   }
 
-  .logo-text {
-    font-size: 1.5rem;
+  .header-main-row {
+    align-items: center;
+    margin-bottom: 0;
   }
 
   .main-title {
-    font-size: 1.125rem;
-    margin-top: 8px;
+    font-size: 1.25rem;
+    margin-top: 0;
   }
 
   .subtitle {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
   }
 

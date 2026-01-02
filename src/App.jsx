@@ -446,19 +446,16 @@ function App() {
     <div className="app" data-theme={theme}>
       <div className="control-panel">
         <div className="panel-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="logo-container">
-              <span className="logo-text">iso</span>
-            </div>
+          <div className="header-main-row">
+            <h1 className="main-title">Dark Store Map</h1>
             <button
               className="theme-toggle"
               onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
           </div>
-          <h1 className="main-title">Isochrone Map</h1>
-          <p className="subtitle">Spatial accessibility analysis for dark store delivery networks.</p>
+          <p className="subtitle">Dark store density map</p>
         </div>
 
 
