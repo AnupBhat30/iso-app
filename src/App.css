@@ -103,6 +103,8 @@ body {
 .app {
   display: flex;
   height: 100vh;
+  height: 100dvh;
+  /* Dynamic viewport height for Safari */
   overflow: hidden;
 }
 
@@ -1180,12 +1182,17 @@ body {
     min-width: 100%;
     height: auto;
     max-height: 35vh;
+    max-height: 35dvh;
+    /* Safari dynamic viewport */
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
     z-index: 2000;
     border-right: none;
     border-top: 1px solid var(--border);
     border-radius: 28px 28px 0 0;
-    padding: 28px 20px calc(30px + env(safe-area-inset-bottom));
+    padding: 28px 20px calc(40px + env(safe-area-inset-bottom, 20px));
+    /* More generous safe area */
     gap: 16px;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
     display: flex;
@@ -1208,6 +1215,8 @@ body {
 
   .map-container {
     height: 100vh;
+    height: 100dvh;
+    /* Safari dynamic viewport */
     width: 100vw;
   }
 
