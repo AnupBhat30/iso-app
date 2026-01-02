@@ -319,7 +319,21 @@ function App() {
   useEffect(() => {
     fetch('/dark_store.kml')
       .then(res => res.text())
-      .then(kml => setAllStores(parseKML(kml)))
+      .then(kml => {
+        const rawStores = parseKML(kml);
+
+        // Deduplicate stores based on brand + coordinates to prevent
+        // clustering artifacts where the same store appears multiple times
+        const seen = new Set();
+        const uniqueStores = rawStores.filter(store => {
+          const key = `${store.brand}:${store.lat.toFixed(6)},${store.lng.toFixed(6)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setAllStores(uniqueStores);
+      })
       .catch(err => console.error('KML Load Error:', err));
 
     // Load metro lines for orientation
@@ -359,7 +373,7 @@ function App() {
         // to prevent redundant polygon stacking and improve performance.
         const seen = new Set();
         const deduplicated = rawData.filter(item => {
-          const key = `${item.store.brand}:${item.store.lat},${item.store.lng}`;
+          const key = `${item.store.brand}:${item.store.lat.toFixed(6)},${item.store.lng.toFixed(6)}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;

@@ -262,10 +262,20 @@ async function run(cityKey, minutes, mode) {
     const allStores = parseKML(kmlContent);
 
     const city = CITIES[cityKey];
-    const cityStores = allStores.filter(s =>
+    const rawCityStores = allStores.filter(s =>
         s.lat >= city.bounds.minLat && s.lat <= city.bounds.maxLat &&
         s.lng >= city.bounds.minLng && s.lng <= city.bounds.maxLng
     );
+
+    // Deduplicate city stores within the same brand at the exact same location
+    // This saves on API credits and prevents redundant polygons in the final data.
+    const seen = new Set();
+    const cityStores = rawCityStores.filter(s => {
+        const key = `${s.brand}:${s.lat.toFixed(6)},${s.lng.toFixed(6)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 
     if (cityStores.length === 0) {
         console.log(`⚠️ No stores found for ${cityKey}`);
