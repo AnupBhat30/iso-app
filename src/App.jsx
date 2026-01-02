@@ -139,9 +139,8 @@ const CITIES = {
   }
 };
 
-const createBrandIcon = (brand, size = 24) => {
+const createBrandIcon = (brand, size = 18) => {
   const color = brandColors[brand] || '#666';
-  const initial = brand ? brand[0].toUpperCase() : '?';
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
@@ -150,14 +149,9 @@ const createBrandIcon = (brand, size = 24) => {
       height: ${size}px;
       border-radius: 50%;
       border: 2px solid white;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: ${size / 2.4}px;
-      font-weight: bold;
-    ">${initial}</div>`,
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+    "></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -165,9 +159,9 @@ const createBrandIcon = (brand, size = 24) => {
 
 const searchIcon = L.divIcon({
   className: 'custom-marker',
-  html: `<div style="background: #ffffff; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #6366f1; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(99,102,241,0.5);">📍</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
+  html: `<div style="background: #0071e3; width: 12px; height: 12px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 20px rgba(0,113,227,0.5);"></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
 });
 
 function MapController({ center, zoom = 13 }) {
@@ -193,12 +187,11 @@ function MapEvents({ onMapClick, onZoomChange, onMoveEnd }) {
 }
 
 // Map overlay components for better indications
-function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomputed, travelMode, areas, onJump }) {
+function MapOverlays({ zoomLevel, areaName, isPrecomputed, travelMode, areas, onJump }) {
   return (
     <>
       {/* Zoom Level Indicator */}
       <div className="map-overlay zoom-indicator">
-        <span className="zoom-icon">🔍</span>
         <span className="zoom-value">{zoomLevel}x</span>
       </div>
 
@@ -220,20 +213,6 @@ function MapOverlays({ zoomLevel, areaName, storeCount, brandCounts, isPrecomput
       </div>
 
 
-      {/* Brand Legend */}
-      <div className="map-overlay brand-legend">
-        <div className="legend-title">Platforms</div>
-        {Object.entries(brandCounts).map(([brand, count]) => (
-          <div key={brand} className="legend-row">
-            <span
-              className="legend-dot"
-              style={{ backgroundColor: brandColors[brand] }}
-            />
-            <span className="legend-label">{brandNames[brand]}</span>
-            <span className="legend-count">{count}</span>
-          </div>
-        ))}
-      </div>
     </>
   );
 }
@@ -294,14 +273,7 @@ function App() {
     setCurrentArea(nearest);
   }, [selectedCity]);
 
-  // Brand counts for legend
-  const brandCounts = useMemo(() => {
-    const counts = { blinkit: 0, zepto: 0, instamart: 0 };
-    isochrones.forEach(({ store }) => {
-      if (counts[store.brand] !== undefined) counts[store.brand]++;
-    });
-    return counts;
-  }, [isochrones]);
+
 
   // Memoized polygon positions for performance
   const memoizedPolygons = useMemo(() => {
@@ -400,20 +372,7 @@ function App() {
     );
   }, [allStores, selectedCity, selectedBrands]);
 
-  const redundancyMetric = useMemo(() => {
-    if (isochrones.length < 2) return 0;
-    // Simple heuristic for saturation: stores within 500m of each other
-    let duplicates = 0;
-    filteredStores.forEach((s1, i) => {
-      const hasNeighbor = filteredStores.some((s2, j) => {
-        if (i === j) return false;
-        const dist = Math.sqrt(Math.pow(s1.lat - s2.lat, 2) + Math.pow(s1.lng - s2.lng, 2));
-        return dist < 0.005; // ~500m
-      });
-      if (hasNeighbor) duplicates++;
-    });
-    return Math.round((duplicates / filteredStores.length) * 100);
-  }, [filteredStores, isochrones]);
+
 
 
   const testAccessibility = async (arg1, arg2) => {
@@ -487,32 +446,24 @@ function App() {
     <div className="app" data-theme={theme}>
       <div className="control-panel">
         <div className="panel-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="logo-container">
               <span className="logo-text">iso</span>
-              <div className="status-dot"></div>
             </div>
             <button
               className="theme-toggle"
               onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-              style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '4px' }}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
           </div>
-          <h1 className="main-title">isochrone map</h1>
-          <p className="subtitle">except the metric is walking-time-to-dark-store</p>
+          <h1 className="main-title">Isochrone Map</h1>
+          <p className="subtitle">Spatial accessibility analysis for dark store delivery networks.</p>
         </div>
 
 
 
-        <div className="panel-section">
-          <label className="section-label">Travel Mode</label>
-          <div className="view-toggle">
-            <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>🚶 10m Walk</button>
-            <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>🛵 10m Delivery</button>
-          </div>
-        </div>
+
 
         <div className="panel-section">
           <label className="section-label">Select City</label>
@@ -527,6 +478,14 @@ function App() {
           </select>
         </div>
 
+        <div className="panel-section">
+          <label className="section-label">Travel Mode</label>
+          <div className="view-toggle">
+            <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>10m Walk</button>
+            <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>10m Delivery</button>
+          </div>
+        </div>
+
 
 
 
@@ -536,12 +495,6 @@ function App() {
           <label className="section-label">Platforms</label>
           <div className="brand-filters">
             {Object.entries(brandNames).map(([k, v]) => {
-              const hexToRgb = (hex) => {
-                const r = parseInt(hex.slice(1, 3), 16);
-                const g = parseInt(hex.slice(3, 5), 16);
-                const b = parseInt(hex.slice(5, 7), 16);
-                return `${r}, ${g}, ${b}`;
-              };
               return (
                 <label key={k} className="brand-checkbox">
                   <input
@@ -549,13 +502,7 @@ function App() {
                     checked={selectedBrands[k]}
                     onChange={() => setSelectedBrands(p => ({ ...p, [k]: !p[k] }))}
                   />
-                  <div
-                    className="brand-card"
-                    style={{
-                      '--brand-color': brandColors[k],
-                      '--brand-color-rgb': hexToRgb(brandColors[k])
-                    }}
-                  >
+                  <div className="brand-card">
                     <img src={`/img/${k}.png`} alt={v} className="brand-logo-img" />
                     <span className="brand-name">{v}</span>
                   </div>
@@ -574,28 +521,14 @@ function App() {
 
 
 
-        <div className="stats-panel">
-          <div className="stat">
-            <span className="stat-value">{filteredStores.length}</span>
-            <span className="stat-label">Stores</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{redundancyMetric}%</span>
-            <span className="stat-label">Overlap</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{walkingTime}m</span>
-            <span className="stat-label">Walk</span>
-          </div>
-        </div>
+
 
 
 
         <div className="hypothesis-callout">
-          <div className="callout-icon">💡</div>
           <div className="callout-content">
-            <strong>The Concept</strong>
-            "Someone should make an isochrone map, except the metric is walking-time-to-dark-store."
+            <strong>What is it?</strong>
+            A spatial visualization of dark store coverage metrics using 10-minute isochrones.
           </div>
         </div>
       </div>
@@ -691,8 +624,6 @@ function App() {
         <MapOverlays
           zoomLevel={zoomLevel}
           areaName={currentArea}
-          storeCount={isochrones.length}
-          brandCounts={brandCounts}
           isPrecomputed={walkingTime === 10}
           travelMode={travelMode}
           areas={CITIES[selectedCity].areas}
