@@ -22,9 +22,9 @@ export const darkStores = [
 ];
 
 export const brandColors = {
-    blinkit: "#F8C823",
-    zepto: "#8B5CF6",
-    instamart: "#FF6B35"
+    blinkit: "#FFCC00",   // Apple Yellow
+    zepto: "#AF52DE",     // Apple Purple
+    instamart: "#FF9500"  // Apple Orange
 };
 
 export const brandNames = {

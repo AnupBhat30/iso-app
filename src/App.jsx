@@ -455,7 +455,7 @@ function App() {
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
           </div>
-          <p className="subtitle">Dark store density map</p>
+          <p className="subtitle">A 10-minute isochrone map showing the reach of dark store networks.</p>
         </div>
 
 
