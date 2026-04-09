@@ -887,6 +887,72 @@ body {
 }
 
 /* ============================================
+   SEO CONTENT
+   ============================================ */
+
+.seo-content {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.seo-title {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.seo-content h3 {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.seo-content p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.seo-list {
+  list-style: disc;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.seo-list li {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.seo-content details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.seo-content summary {
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.seo-content details p {
+  margin-top: 8px;
+}
+
+/* ============================================
    MAP OVERRIDES
    ============================================ */
 
@@ -1302,6 +1368,20 @@ body {
 
   .hypothesis-callout {
     display: none;
+  }
+
+  .seo-content {
+    padding: 12px;
+  }
+
+  .seo-title {
+    font-size: 0.875rem;
+  }
+
+  .seo-content p,
+  .seo-list li,
+  .seo-content summary {
+    font-size: 0.74rem;
   }
 
   /* Adjust map controls to not be hidden by the top area pills */
