@@ -165,6 +165,33 @@ const searchIcon = L.divIcon({
   iconAnchor: [6, 6],
 });
 
+function MapSizeGuard() {
+  const map = useMap();
+  useEffect(() => {
+    // Leaflet calculates its tile grid from the container size at init time.
+    // On mobile the layout often hasn't settled yet (dynamic viewport, address
+    // bar animation, bottom-sheet CSS), leaving black/empty tile slots.
+    // Re-measure after a short delay and again once everything is painted.
+    const timers = [
+      setTimeout(() => map.invalidateSize(), 100),
+      setTimeout(() => map.invalidateSize(), 400),
+    ];
+    const onResize = () => map.invalidateSize();
+    window.addEventListener('resize', onResize);
+    if (typeof window.visualViewport !== 'undefined') {
+      window.visualViewport.addEventListener('resize', onResize);
+    }
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener('resize', onResize);
+      if (typeof window.visualViewport !== 'undefined') {
+        window.visualViewport.removeEventListener('resize', onResize);
+      }
+    };
+  }, [map]);
+  return null;
+}
+
 function MapController({ center, zoom = 13 }) {
   const map = useMap();
   useEffect(() => {
@@ -563,6 +590,7 @@ function App() {
             zIndex={100}
             pane="markerPane"
           />
+          <MapSizeGuard />
           <MapController center={mapCenter} />
           <MapEvents
             onMapClick={testAccessibility}

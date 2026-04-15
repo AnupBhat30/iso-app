@@ -960,6 +960,10 @@ body {
   background: var(--bg-primary) !important;
 }
 
+.leaflet-tile-pane {
+  will-change: transform;
+}
+
 .leaflet-popup-content-wrapper {
   background: var(--bg-glass) !important;
   backdrop-filter: blur(10px);
