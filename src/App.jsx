@@ -139,10 +139,32 @@ const CITIES = {
   }
 };
 
-const createBrandIcon = (brand, size = 7) => {
+const createBrandIcon = (brand, size = 7, useLogo = false) => {
   const color = brandColors[brand] || '#666';
+  if (useLogo) {
+    return L.divIcon({
+      className: 'brand-logo-marker',
+      brand,
+      html: `<div style="
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 2px solid white;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "><img src="/img/${brand}.png" alt="" style="width: 100%; height: 100%; object-fit: cover;" /></div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -size / 2],
+    });
+  }
   return L.divIcon({
     className: 'custom-marker',
+    brand,
     html: `<div style="
       background: ${color};
       width: ${size}px;
@@ -153,6 +175,36 @@ const createBrandIcon = (brand, size = 7) => {
       opacity: 0.5;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     "></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+};
+
+const createBrandPieClusterIcon = (cluster) => {
+  const counts = { blinkit: 0, instamart: 0, zepto: 0 };
+  cluster.getAllChildMarkers().forEach(marker => {
+    const brand = marker.getIcon()?.options?.brand;
+    if (brand in counts) counts[brand] += 1;
+  });
+
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const order = ['blinkit', 'instamart', 'zepto'];
+  let cursor = 0;
+  const slices = [];
+  order.forEach(brand => {
+    const share = total ? (counts[brand] / total) * 100 : 0;
+    if (share > 0) {
+      slices.push(`${brandColors[brand]} ${cursor}% ${cursor + share}%`);
+      cursor += share;
+    }
+  });
+  const size = total >= 100 ? 58 : total >= 25 ? 50 : 42;
+
+  return L.divIcon({
+    className: 'brand-pie-cluster',
+    html: `<div class="cluster-pie" style="--cluster-size:${size}px; background: conic-gradient(${slices.join(', ')});">
+      <span class="cluster-count">${total}</span>
+    </div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -192,11 +244,18 @@ function MapSizeGuard() {
   return null;
 }
 
-function MapController({ center, zoom = 13 }) {
+function MapController({ center, zoom = 13, bounds }) {
   const map = useMap();
   useEffect(() => {
-    if (center) map.setView(center, zoom, { animate: true });
-  }, [center, map]);
+    if (bounds) {
+      map.fitBounds([
+        [bounds.minLat, bounds.minLng],
+        [bounds.maxLat, bounds.maxLng]
+      ], { animate: true, padding: [24, 24] });
+    } else if (center) {
+      map.setView(center, zoom, { animate: true });
+    }
+  }, [bounds, center, map, zoom]);
   return null;
 }
 
@@ -264,6 +323,8 @@ const MemoizedPolygon = memo(function MemoizedPolygon({ positions, color, viewMo
 function App() {
   const [theme, setTheme] = useState('dark');
   const [allStores, setAllStores] = useState([]);
+  const [metroStores, setMetroStores] = useState([]);
+  const [stateOptions, setStateOptions] = useState([]);
   const [selectedCity, setSelectedCity] = useState('bangalore');
   const [travelMode, setTravelMode] = useState('bike'); // 'walk' or 'bike'
   const apiKey = import.meta.env.VITE_GEOAPIFY_KEY || '';
@@ -285,9 +346,17 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(13);
   const [currentArea, setCurrentArea] = useState(null);
   const [metroLines, setMetroLines] = useState(null);
+  const isStateSelection = selectedCity.startsWith('state:');
+  const selectedStateOption = isStateSelection
+    ? stateOptions.find(state => state.key === selectedCity)
+    : null;
 
   // Find nearest area name based on map center
   const findNearestArea = useCallback((center) => {
+    if (selectedCity.startsWith('state:')) {
+      setCurrentArea(null);
+      return;
+    }
     const city = CITIES[selectedCity];
     let nearest = null;
     let minDist = Infinity;
@@ -332,9 +401,17 @@ function App() {
           return true;
         });
 
-        setAllStores(uniqueStores);
+        setMetroStores(uniqueStores);
       })
       .catch(err => console.error('KML Load Error:', err));
+
+    fetch('/data/stores/states/index.json')
+      .then(res => {
+        if (!res.ok) throw new Error('State index not found');
+        return res.json();
+      })
+      .then(data => setStateOptions(data.states || []))
+      .catch(err => console.error('State index load error:', err));
 
     // Load metro lines for orientation
     fetch('/data/precomputed/export.geojson')
@@ -343,8 +420,44 @@ function App() {
       .catch(err => console.warn('Metro lines not loaded:', err));
   }, []);
 
+  useEffect(() => {
+    if (!isStateSelection) {
+      setAllStores(metroStores);
+      return;
+    }
+    if (!selectedStateOption) return;
+
+    let cancelled = false;
+    setLoading(true);
+    fetch(selectedStateOption.file)
+      .then(res => {
+        if (!res.ok) throw new Error(`State data not found: ${selectedStateOption.name}`);
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) setAllStores(data.stores || []);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setAllStores([]);
+          console.error('State store load error:', err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [isStateSelection, metroStores, selectedStateOption]);
+
   // Handle precomputed data loading
   useEffect(() => {
+    if (isStateSelection) {
+      setSelectedBrands({ blinkit: true, zepto: true, instamart: true });
+      setIsochrones([]);
+      return;
+    }
+
     // Optimization: Default to Blinkit only for Bike mode to improve initial render performance
     // and reduce visual clutter on high-density delivery maps.
     if (travelMode === 'bike') {
@@ -389,16 +502,19 @@ function App() {
     };
 
     loadPrecomputedData();
-  }, [selectedCity, travelMode, walkingTime]);
+  }, [isStateSelection, selectedCity, travelMode, walkingTime]);
 
   const filteredStores = useMemo(() => {
+    if (isStateSelection) {
+      return allStores.filter(store => selectedBrands[store.brand]);
+    }
     const city = CITIES[selectedCity];
     return allStores.filter(s =>
       s.lat >= city.bounds.minLat && s.lat <= city.bounds.maxLat &&
       s.lng >= city.bounds.minLng && s.lng <= city.bounds.maxLng &&
       selectedBrands[s.brand]
     );
-  }, [allStores, selectedCity, selectedBrands]);
+  }, [allStores, isStateSelection, selectedCity, selectedBrands]);
 
 
 
@@ -410,6 +526,7 @@ function App() {
 
     if (lat === undefined || lng === undefined) return;
     setUserLocation([lat, lng]);
+    if (isStateSelection) return;
     setLocalAccessibility({ loading: true, stores: [] });
 
     // Find stores within relevant check distance
@@ -479,11 +596,12 @@ function App() {
             <button
               className="theme-toggle"
               onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
             >
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
           </div>
-          <p className="subtitle">Explore the reach of Zepto, Blinkit, and Instamart dark stores in Indian cities.</p>
+          <p className="subtitle">Explore current Zepto, Blinkit, and Instamart locations across India.</p>
         </header>
 
 
@@ -491,25 +609,39 @@ function App() {
 
 
         <section className="panel-section">
-          <label className="section-label">Select City</label>
-          <select className="city-select" value={selectedCity} onChange={e => {
-            setSelectedCity(e.target.value);
-            setMapCenter(CITIES[e.target.value].center);
+          <label className="section-label" htmlFor="coverage-select">Select Coverage</label>
+          <select id="coverage-select" className="city-select" value={selectedCity} onChange={e => {
+            const next = e.target.value;
+            const state = stateOptions.find(option => option.key === next);
+            setSelectedCity(next);
+            setMapCenter(state?.center || CITIES[next]?.center || CITIES.bangalore.center);
             setIsochrones([]);
             setSearchResult(null);
             setUserLocation(null);
           }}>
-            {Object.entries(CITIES).map(([k, c]) => <option key={k} value={k}>{c.name}</option>)}
+            <optgroup label="Coverage + 10-minute isolines">
+              {Object.entries(CITIES).map(([k, c]) => <option key={k} value={k}>{c.name}</option>)}
+            </optgroup>
+            <optgroup label="India states — markers only">
+              {stateOptions.map(state => (
+                <option key={state.key} value={state.key}>{state.name} ({state.count})</option>
+              ))}
+            </optgroup>
           </select>
+          {isStateSelection && (
+            <p className="selection-note">Store locations only · no coverage polygons</p>
+          )}
         </section>
 
-        <section className="panel-section">
-          <label className="section-label">Travel Mode</label>
-          <div className="view-toggle">
-            <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>10m Walk</button>
-            <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>10m Delivery</button>
-          </div>
-        </section>
+        {!isStateSelection && (
+          <section className="panel-section">
+            <span className="section-label">Travel Mode</span>
+            <div className="view-toggle">
+              <button className={`toggle-btn ${travelMode === 'walk' ? 'active' : ''}`} onClick={() => setTravelMode('walk')}>10m Walk</button>
+              <button className={`toggle-btn ${travelMode === 'bike' ? 'active' : ''}`} onClick={() => setTravelMode('bike')}>10m Delivery</button>
+            </div>
+          </section>
+        )}
 
 
 
@@ -517,7 +649,7 @@ function App() {
 
 
         <section className="panel-section">
-          <label className="section-label">Platforms</label>
+          <span className="section-label">Platforms</span>
           <div className="brand-filters">
             {Object.entries(brandNames).map(([k, v]) => {
               return (
@@ -537,23 +669,21 @@ function App() {
           </div>
         </section>
 
-        <section className="panel-section">
-          <div className="view-toggle">
-            <button className={`toggle-btn ${viewMode === 'heatmap' ? 'active' : ''}`} onClick={() => setViewMode('heatmap')}>Heatmap</button>
-            <button className={`toggle-btn ${viewMode === 'isochrones' ? 'active' : ''}`} onClick={() => setViewMode('isochrones')}>Polygons</button>
-          </div>
-        </section>
-
-
-
-
-
-
+        {!isStateSelection && (
+          <section className="panel-section">
+            <div className="view-toggle">
+              <button className={`toggle-btn ${viewMode === 'heatmap' ? 'active' : ''}`} onClick={() => setViewMode('heatmap')}>Heatmap</button>
+              <button className={`toggle-btn ${viewMode === 'isochrones' ? 'active' : ''}`} onClick={() => setViewMode('isochrones')}>Polygons</button>
+            </div>
+          </section>
+        )}
 
         <footer className="hypothesis-callout">
           <div className="callout-content">
             <strong>What is it?</strong>
-            A spatial visualization of dark store coverage metrics using 10-minute isochrones.
+            {isStateSelection
+              ? 'A current state-level view of dark store locations. Coverage polygons are available for the five metro regions.'
+              : 'A spatial visualization of dark store coverage metrics using 10-minute isochrones.'}
           </div>
         </footer>
 
@@ -565,7 +695,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="map-container">
+      <main className="map-container" aria-label="Interactive dark store location and delivery coverage map">
         <MapContainer
           center={CITIES.bangalore.center}
           zoom={13}
@@ -591,7 +721,11 @@ function App() {
             pane="markerPane"
           />
           <MapSizeGuard />
-          <MapController center={mapCenter} />
+          <MapController
+            center={mapCenter}
+            zoom={isStateSelection ? 7 : 13}
+            bounds={selectedStateOption?.bounds}
+          />
           <MapEvents
             onMapClick={testAccessibility}
             onZoomChange={setZoomLevel}
@@ -609,7 +743,7 @@ function App() {
           ))}
 
           {/* Metro Lines Orientation Layer */}
-          {metroLines && (
+          {!isStateSelection && metroLines && (
             <GeoJSON
               data={metroLines}
               filter={(feature) => feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString'}
@@ -631,10 +765,19 @@ function App() {
               maxClusterRadius={50}
               spiderfyOnMaxZoom={true}
               disableClusteringAtZoom={16}
+              iconCreateFunction={isStateSelection ? createBrandPieClusterIcon : undefined}
             >
               {filteredStores.map((s, i) => (
-                <Marker key={i} position={[s.lat, s.lng]} icon={createBrandIcon(s.brand, 20)}>
-                  <Popup><strong>{s.name}</strong><br />{brandNames[s.brand]}</Popup>
+                <Marker
+                  key={`${s.brand}:${s.id || i}`}
+                  position={[s.lat, s.lng]}
+                  icon={createBrandIcon(s.brand, isStateSelection ? 26 : 20, isStateSelection)}
+                >
+                  <Popup>
+                    <strong>{s.name}</strong><br />
+                    {brandNames[s.brand]}
+                    {(s.city || s.state) && <><br />{[s.city, s.state].filter(Boolean).join(', ')}</>}
+                  </Popup>
                 </Marker>
               ))}
             </MarkerClusterGroup>
@@ -647,8 +790,8 @@ function App() {
           <div className="map-loading-overlay">
             <div className="loading-content">
               <div className="spinner"></div>
-              <span>Loading City Data...</span>
-              <p className="loading-hint">Fetching high-fidelity polygons</p>
+              <span>{isStateSelection ? 'Loading State Stores...' : 'Loading City Data...'}</span>
+              <p className="loading-hint">{isStateSelection ? 'Plotting current store locations' : 'Fetching high-fidelity polygons'}</p>
             </div>
           </div>
         )}
@@ -657,9 +800,9 @@ function App() {
         <MapOverlays
           zoomLevel={zoomLevel}
           areaName={currentArea}
-          isPrecomputed={walkingTime === 10}
+          isPrecomputed={!isStateSelection && walkingTime === 10}
           travelMode={travelMode}
-          areas={CITIES[selectedCity].areas}
+          areas={isStateSelection ? [] : CITIES[selectedCity].areas}
           onJump={setMapCenter}
         />
 
