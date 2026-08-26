@@ -9,7 +9,7 @@ import { batchGenerateIsochrones, generateIsochrone } from './services/isochrone
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 
-const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY || '';
+const CARTO_BASEMAP_KEY = import.meta.env.CARTO_BASEMAP_KEY || '';
 const cartoTileUrl = (style) => {
   const keyParam = CARTO_BASEMAP_KEY
     ? `?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
