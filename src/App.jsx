@@ -9,6 +9,14 @@ import { batchGenerateIsochrones, generateIsochrone } from './services/isochrone
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 
+const CARTO_BASEMAP_KEY = import.meta.env.VITE_CARTO_BASEMAP_KEY || '';
+const cartoTileUrl = (style) => {
+  const keyParam = CARTO_BASEMAP_KEY
+    ? `?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
+    : '';
+  return `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png${keyParam}`;
+};
+
 // Use Canvas renderer for better performance with many polygons
 const canvasRenderer = L.canvas({ padding: 0.5 });
 
@@ -706,16 +714,16 @@ function App() {
             attribution='&copy; CARTO'
             className="map-base-layer"
             url={theme === 'dark'
-              ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+              ? cartoTileUrl('dark_nolabels')
+              : cartoTileUrl('light_nolabels')
             }
           />
 
           {/* Top Layer: Labels, Stations & Landmarks */}
           <TileLayer
             url={theme === 'dark'
-              ? "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+              ? cartoTileUrl('dark_only_labels')
+              : cartoTileUrl('light_only_labels')
             }
             zIndex={100}
             pane="markerPane"
